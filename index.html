@@ -1,0 +1,640 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cash Flow</title>
+<meta name="theme-color" content="#0f766e"> <!-- pwa -->
+<meta name="apple-mobile-web-app-capable" content="yes"> <!-- pwa -->
+<meta name="mobile-web-app-capable" content="yes"> <!-- pwa -->
+<meta name="apple-mobile-web-app-title" content="Cash Flow"> <!-- pwa -->
+<link rel="manifest" href="manifest.webmanifest"> <!-- pwa -->
+<link rel="apple-touch-icon" href="icon-180.png"> <!-- pwa -->
+<style>
+/* Layout: one narrow column, three tabs pinned to the bottom, entry forms as a bottom sheet. */
+:root {
+  --bg: #f3f6f6;
+  --surface: #ffffff;
+  --fg: #14201f;
+  --muted: #5b6968;
+  --line: #dbe2e2;
+  --accent: #0f766e;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(15, 118, 110, .13);
+  --pos: #15803d;
+  --neg: #b42318;
+  --scrim: rgba(10, 20, 20, .45);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1313; --surface: #151d1d; --fg: #e6eded; --muted: #92a2a1; --line: #263130;
+    --accent: #2dd4bf; --accent-fg: #04201c; --accent-soft: rgba(45, 212, 191, .15);
+    --pos: #4ade80; --neg: #f87171; --scrim: rgba(0, 0, 0, .6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1313; --surface: #151d1d; --fg: #e6eded; --muted: #92a2a1; --line: #263130;
+  --accent: #2dd4bf; --accent-fg: #04201c; --accent-soft: rgba(45, 212, 191, .15);
+  --pos: #4ade80; --neg: #f87171; --scrim: rgba(0, 0, 0, .6);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { padding-top: env(safe-area-inset-top, 0px); }
+body {
+  margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.4 var(--font);
+  padding-inline: 16px; padding-block: 12px 96px; -webkit-text-size-adjust: 100%;
+}
+main { max-width: 560px; margin-inline: auto; display: grid; gap: 14px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+.num { font-variant-numeric: tabular-nums; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; min-width: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+
+.monthnav { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 6px; }
+.monthnav button { height: 44px; border: 0; background: transparent; border-radius: 10px; }
+.monthnav .arrow { font-size: 26px; line-height: 1; color: var(--accent); }
+.monthnav .label { font-size: 20px; font-weight: 700; }
+.pagetitle { font-size: 22px; font-weight: 700; margin: 4px 0 2px; }
+
+.summary .net { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.summary .big { font-size: 32px; font-weight: 700; letter-spacing: -.01em; }
+.summary .split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.stat .k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.stat .v { font-size: 18px; font-weight: 650; }
+.pos { color: var(--pos); } .neg { color: var(--neg); }
+.rate { height: 6px; border-radius: 3px; background: var(--line); margin-top: 10px; overflow: hidden; }
+.rate > i { display: block; height: 100%; background: var(--accent); }
+
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.btn { min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; }
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.btn.danger { color: var(--neg); }
+.btn.armed { background: var(--neg); color: #fff; border-color: var(--neg); }
+.btn[disabled] { opacity: .45; cursor: default; }
+.btn.block { width: 100%; }
+
+svg.chart { width: 100%; height: auto; display: block; }
+svg.chart .line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+svg.chart .area { fill: var(--accent-soft); stroke: none; }
+svg.chart .zero { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; opacity: .6; }
+svg.chart text { fill: var(--muted); font-size: 10px; font-family: var(--font); }
+svg.chart .dot { fill: var(--accent); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+
+.cat { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 7px 0; }
+.cat .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat .track { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.cat .track i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+
+.rows { display: grid; }
+.row { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%;
+  text-align: left; background: transparent; border: 0; border-top: 1px solid var(--line); padding: 10px 0; min-height: 52px; }
+.row:first-child { border-top: 0; }
+.row .d { font-size: 13px; color: var(--muted); }
+.row .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .n { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row.rec { grid-template-columns: minmax(0, 1fr) auto; }
+.empty { text-align: center; padding: 22px 8px; color: var(--muted); }
+.empty strong { display: block; color: var(--fg); margin-bottom: 4px; font-size: 17px; }
+
+.tabs { position: fixed; inset-inline: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px); }
+.tabs div { max-width: 560px; margin-inline: auto; display: grid; grid-template-columns: repeat(3, 1fr); }
+.tabs button { background: transparent; border: 0; min-height: 56px; display: grid; place-items: center; gap: 2px;
+  font-size: 12px; color: var(--muted); padding: 6px 0; }
+.tabs button[aria-current="page"] { color: var(--accent); font-weight: 700; }
+.tabs svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+.scrim { position: fixed; inset: 0; background: var(--scrim); display: flex; align-items: flex-end; justify-content: center; z-index: 10; }
+.sheet { background: var(--surface); width: 100%; max-width: 560px; max-height: 92%; overflow: auto;
+  border-radius: 18px 18px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 12px; }
+.sheet h3 { margin: 0; font-size: 18px; }
+.field { display: grid; gap: 4px; }
+.field > span { font-size: 13px; color: var(--muted); }
+.field input, .field select, textarea { width: 100%; min-height: 44px; padding: 8px 10px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--bg); }
+textarea { min-height: 96px; resize: vertical; font-size: 13px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg label { display: block; text-align: center; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg span { display: block; padding: 10px; font-weight: 600; background: var(--bg); }
+.seg input:checked + span { background: var(--accent); color: var(--accent-fg); }
+.seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: -2px; }
+.err { color: var(--neg); font-size: 13px; min-height: 0; }
+.btnrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stack { display: grid; gap: 10px; }
+.line2 { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
+
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  background: var(--fg); color: var(--bg); padding: 10px 14px; border-radius: 10px; font-size: 14px; z-index: 20; max-width: 90%; }
+[hidden] { display: none !important; }
+@media (prefers-reduced-motion: no-preference) { .sheet { animation: up .18s ease-out; } @keyframes up { from { transform: translateY(24px); opacity: .6; } } }
+</style>
+</head>
+<body>
+<main id="view" aria-live="polite"></main>
+
+<nav class="tabs" aria-label="Sections"><div>
+  <button data-act="tab" data-tab="month"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Month</button>
+  <button data-act="tab" data-tab="recurring"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14-4M4 4v4h4M4 13a8 8 0 0 0 14 4M20 20v-4h-4"/></svg>Recurring</button>
+  <button data-act="tab" data-tab="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>Settings</button>
+</div></nav>
+
+<div id="scrim" class="scrim" hidden><div id="sheet" class="sheet" role="dialog" aria-modal="true"></div></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<noscript>This app needs JavaScript.</noscript>
+
+<script>
+(function () {
+  'use strict';
+
+  var KEY = 'cashflow.v1';
+  var EXPENSE = ['Rent/Mortgage', 'Bills', 'Groceries', 'Eating out', 'Transport', 'Subscriptions',
+                 'Health', 'Travel', 'Shopping', 'Debt', 'Other'];
+  var INCOME = ['Salary', 'Bonus', 'Investments', 'Side income', 'Other'];
+  var CURRENCIES = ['GBP', 'USD', 'EUR', 'INR', 'AED', 'SGD', 'AUD', 'CAD'];
+
+  /* ---------- helpers ---------- */
+  function $(s) { return document.querySelector(s); }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function r2(v) { return Math.round(v * 100) / 100; }
+  function uid() {
+    try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
+    return 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  }
+  function todayStr() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function ymNow() { return todayStr().slice(0, 7); }
+  function addMonths(ym, n) {
+    var y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 1 + n;
+    y += Math.floor(m / 12); m = ((m % 12) + 12) % 12;
+    return y + '-' + pad(m + 1);
+  }
+  function daysIn(ym) { return new Date(+ym.slice(0, 4), +ym.slice(5, 7), 0).getDate(); }
+  function ymLabel(ym) {
+    return new Date(+ym.slice(0, 4), +ym.slice(5, 7) - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  }
+  function dayLabel(ds) {
+    return new Date(+ds.slice(0, 4), +ds.slice(5, 7) - 1, +ds.slice(8, 10))
+      .toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
+  }
+
+  /* "1,234.50", "1.234,50", "12,5", "1,234" all work. */
+  function parseAmount(raw) {
+    var s = String(raw).replace(/\s+/g, '');
+    if (!s) return null;
+    var last = Math.max(s.lastIndexOf(','), s.lastIndexOf('.'));
+    var out;
+    if (last < 0) out = s;
+    else {
+      var tail = s.slice(last + 1);
+      var head = s.slice(0, last).replace(/[.,]/g, '');
+      var seps = (s.match(/[.,]/g) || []).length;
+      if (tail.length === 3 && (s.charAt(last) === ',' || seps > 1)) out = head + tail;
+      else out = head + '.' + tail;
+    }
+    if (!/^\d*\.?\d*$/.test(out) || out === '' || out === '.') return null;
+    var n = Number(out);
+    return isFinite(n) ? n : null;
+  }
+
+  /* ---------- storage ---------- */
+  var mem = null, warned = false;
+  function blank() { return { v: 1, currency: 'GBP', entries: [], recurring: [] }; }
+  function clean(o) {
+    var s = blank();
+    if (!o || typeof o !== 'object') return s;
+    if (typeof o.currency === 'string' && /^[A-Z]{3}$/.test(o.currency)) s.currency = o.currency;
+    (Array.isArray(o.entries) ? o.entries : []).forEach(function (e) {
+      if (!e || typeof e !== 'object') return;
+      var a = Number(e.amount);
+      if (!(a > 0) || !isFinite(a) || !/^\d{4}-\d{2}-\d{2}$/.test(String(e.date))) return;
+      s.entries.push({
+        id: typeof e.id === 'string' && e.id ? e.id : uid(), amount: r2(a), date: String(e.date),
+        category: String(e.category || 'Other'), note: String(e.note || ''), isIncome: !!e.isIncome,
+        recurringID: typeof e.recurringID === 'string' && e.recurringID ? e.recurringID : null
+      });
+    });
+    (Array.isArray(o.recurring) ? o.recurring : []).forEach(function (r) {
+      if (!r || typeof r !== 'object') return;
+      var a = Number(r.amount);
+      if (!(a > 0) || !isFinite(a)) return;
+      var d = Math.min(31, Math.max(1, Math.round(Number(r.day) || 1)));
+      s.recurring.push({
+        id: typeof r.id === 'string' && r.id ? r.id : uid(), name: String(r.name || r.category || 'Item'),
+        amount: r2(a), day: d, category: String(r.category || 'Other'), isIncome: !!r.isIncome
+      });
+    });
+    return s;
+  }
+  function load() {
+    try { var t = localStorage.getItem(KEY); if (t) return JSON.parse(t); } catch (e) {}
+    return mem;
+  }
+  var state = clean(load());
+  function save() {
+    mem = state;
+    try { localStorage.setItem(KEY, JSON.stringify(state)); }
+    catch (e) {
+      if (!warned) { warned = true; toast('This browser is not saving data. Entries will be lost when you close the page.'); }
+    }
+  }
+
+  /* ---------- formatting ---------- */
+  var fmts = {};
+  function money(v) {
+    try {
+      var f = fmts[state.currency] || (fmts[state.currency] = new Intl.NumberFormat(undefined, { style: 'currency', currency: state.currency }));
+      return f.format(v);
+    } catch (e) { return state.currency + ' ' + v.toFixed(2); }
+  }
+  function plain(v) { return String(r2(v)); }
+
+  /* ---------- UI state ---------- */
+  var ui = { tab: 'month', month: ymNow() };
+  var form = null, armed = null, armedTimer = null, toastTimer = null;
+
+  function toast(msg) {
+    var t = $('#toast'); t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 3200);
+  }
+  function twice(key, btn, label) {
+    if (armed === key) { clearTimeout(armedTimer); armed = null; return true; }
+    armed = key; var orig = btn.textContent; btn.textContent = label; btn.classList.add('armed');
+    clearTimeout(armedTimer);
+    armedTimer = setTimeout(function () {
+      armed = null; if (btn.isConnected) { btn.textContent = orig; btn.classList.remove('armed'); }
+    }, 4000);
+    return false;
+  }
+
+  /* ---------- views ---------- */
+  function sum(list) { return r2(list.reduce(function (a, e) { return a + e.amount; }, 0)); }
+
+  function chartRunning(asc, ym, opening) {
+    var W = 320, H = 120, L = 8, R = 8, T = 10, B = 20, days = daysIn(ym);
+    var pts = [[1, opening]], run = opening;
+    asc.forEach(function (e) {
+      var d = +e.date.slice(8, 10), prev = run;
+      run = r2(run + (e.isIncome ? e.amount : -e.amount));
+      pts.push([d, prev]); pts.push([d, run]);
+    });
+    pts.push([days, run]);
+    var vals = pts.map(function (p) { return p[1]; });
+    var min = Math.min.apply(null, vals.concat(0)), max = Math.max.apply(null, vals.concat(0));
+    if (max === min) { max += 1; min -= 1; }
+    function x(d) { return L + (d - 1) / (days - 1) * (W - L - R); }
+    function y(v) { return T + (max - v) / (max - min) * (H - T - B); }
+    var line = pts.map(function (p, i) { return (i ? 'L' : 'M') + x(p[0]).toFixed(1) + ' ' + y(p[1]).toFixed(1); }).join('');
+    var area = line + 'L' + x(days).toFixed(1) + ' ' + y(0).toFixed(1) + 'L' + x(1).toFixed(1) + ' ' + y(0).toFixed(1) + 'Z';
+    var low = Math.min.apply(null, vals), high = Math.max.apply(null, vals);
+    var svg = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Running balance for the month, from ' + esc(money(opening)) + ' to ' + esc(money(run)) + '">' +
+      '<path class="area" d="' + area + '"/>' +
+      '<line class="zero" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(0).toFixed(1) + '" y2="' + y(0).toFixed(1) + '"/>' +
+      '<path class="line" d="' + line + '"/>' +
+      '<circle class="dot" cx="' + x(days).toFixed(1) + '" cy="' + y(run).toFixed(1) + '" r="3.5"/>' +
+      '<text x="' + L + '" y="' + (H - 4) + '">1</text>' +
+      '<text x="' + (W - R) + '" y="' + (H - 4) + '" text-anchor="end">' + days + '</text>' +
+      '<text x="' + (W / 2) + '" y="' + (H - 4) + '" text-anchor="middle">day of month</text></svg>';
+    return svg + '<div class="legend num"><span>Start ' + esc(money(opening)) + '</span><span>Low ' + esc(money(low)) +
+      '</span><span>High ' + esc(money(high)) + '</span><span>End ' + esc(money(run)) + '</span></div>';
+  }
+
+  function viewMonth() {
+    var ym = ui.month;
+    var list = state.entries.filter(function (e) { return e.date.slice(0, 7) === ym; });
+    var desc = list.slice().sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+    var asc = list.slice().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    var inc = sum(list.filter(function (e) { return e.isIncome; }));
+    var out = sum(list.filter(function (e) { return !e.isIncome; }));
+    var net = r2(inc - out);
+    // Balance carries forward: everything dated before this month, income minus spending.
+    var opening = r2(state.entries.reduce(function (a, e) {
+      return e.date.slice(0, 7) < ym ? a + (e.isIncome ? e.amount : -e.amount) : a;
+    }, 0));
+    var closing = r2(opening + net);
+    var h = '<div class="monthnav"><button class="arrow" data-act="prev" aria-label="Previous month">‹</button>' +
+      '<button class="label" data-act="today" aria-label="Jump to this month">' + esc(ymLabel(ym)) + '</button>' +
+      '<button class="arrow" data-act="next" aria-label="Next month">›</button></div>';
+
+    h += '<section class="card summary"><div class="net"><div class="stat"><div class="k">Balance at end of month</div>' +
+      '<div class="big num ' + (closing >= 0 ? 'pos' : 'neg') + '">' + esc(money(closing)) + '</div></div>';
+    if (inc > 0) {
+      var rate = net / inc;
+      h += '<div class="small muted num">Saved ' + Math.round(rate * 100) + '% of income</div>';
+    }
+    h += '</div>';
+    if (inc > 0) {
+      h += '<div class="rate" aria-hidden="true"><i style="width:' + Math.max(0, Math.min(100, net / inc * 100)).toFixed(0) + '%"></i></div>';
+    }
+    h += '<div class="split">' +
+      '<div class="stat"><div class="k">Brought forward</div><div class="v num ' + (opening < 0 ? 'neg' : '') + '">' + esc(money(opening)) + '</div></div>' +
+      '<div class="stat"><div class="k">Net this month</div><div class="v num ' + (net >= 0 ? 'pos' : 'neg') + '">' + esc(money(net)) + '</div></div>' +
+      '<div class="stat"><div class="k">Income</div><div class="v num pos">' + esc(money(inc)) + '</div></div>' +
+      '<div class="stat"><div class="k">Spent</div><div class="v num">' + esc(money(out)) + '</div></div></div></section>';
+
+    h += '<div class="actions"><button class="btn primary" data-act="add">Add entry</button>' +
+      '<button class="btn" data-act="apply">Apply recurring</button></div>';
+
+    if (!list.length) {
+      h += '<div class="card empty"><strong>Nothing in ' + esc(ymLabel(ym)) + ' yet</strong>' +
+        'Add an entry, or set up rent and salary under Recurring and apply them here.</div>';
+      return h;
+    }
+
+    h += '<section class="card"><h2>Running balance</h2>' + chartRunning(asc, ym, opening) + '</section>';
+
+    var cats = {};
+    list.filter(function (e) { return !e.isIncome; }).forEach(function (e) { cats[e.category] = r2((cats[e.category] || 0) + e.amount); });
+    var names = Object.keys(cats).sort(function (a, b) { return cats[b] - cats[a]; });
+    if (names.length) {
+      var top = cats[names[0]];
+      h += '<section class="card"><h2>Spending by category</h2>';
+      names.forEach(function (n) {
+        h += '<div class="cat"><span class="name">' + esc(n) + '</span><span class="num">' + esc(money(cats[n])) + '</span>' +
+          '<span class="track" aria-hidden="true"><i style="width:' + (cats[n] / top * 100).toFixed(1) + '%"></i></span></div>';
+      });
+      h += '</section>';
+    }
+
+    h += '<section class="card"><h2>Transactions</h2><div class="rows">';
+    desc.forEach(function (e) {
+      h += '<button class="row" data-act="edit" data-id="' + esc(e.id) + '"><span class="d num">' + esc(dayLabel(e.date)) + '</span>' +
+        '<span style="min-width:0"><span class="t" style="display:block">' + esc(e.category) + '</span>' +
+        (e.note ? '<span class="n" style="display:block">' + esc(e.note) + '</span>' : '') + '</span>' +
+        '<span class="num ' + (e.isIncome ? 'pos' : '') + '">' + (e.isIncome ? '+' : '−') + esc(money(e.amount)) + '</span></button>';
+    });
+    return h + '</div></section>';
+  }
+
+  function viewRecurring() {
+    var items = state.recurring.slice().sort(function (a, b) { return a.day - b.day; });
+    var h = '<div class="pagetitle">Recurring</div>' +
+      '<button class="btn primary block" data-act="radd">Add recurring item</button>';
+    if (!items.length) {
+      return h + '<div class="card empty"><strong>No recurring items</strong>Add rent, salary and subscriptions once. ' +
+        'Then use Apply recurring items on the Month tab to fill in any month without duplicates.</div>';
+    }
+    h += '<section class="card"><div class="rows">';
+    items.forEach(function (r) {
+      h += '<button class="row rec" data-act="redit" data-id="' + esc(r.id) + '"><span style="min-width:0">' +
+        '<span class="t" style="display:block">' + esc(r.name) + '</span>' +
+        '<span class="n" style="display:block">' + esc(r.category) + ' · day ' + r.day + '</span></span>' +
+        '<span class="num ' + (r.isIncome ? 'pos' : '') + '">' + (r.isIncome ? '+' : '−') + esc(money(r.amount)) + '</span></button>';
+    });
+    var inc = sum(items.filter(function (r) { return r.isIncome; }));
+    var out = sum(items.filter(function (r) { return !r.isIncome; }));
+    h += '</div></section><section class="card"><h2>Monthly baseline</h2><div class="stack num">' +
+      '<div class="line2"><span>Income</span><span></span><span class="pos">' + esc(money(inc)) + '</span></div>' +
+      '<div class="line2"><span>Committed outgoings</span><span></span><span>' + esc(money(out)) + '</span></div>' +
+      '<div class="line2"><strong>Left over</strong><span></span><strong class="' + (inc - out >= 0 ? 'pos' : 'neg') + '">' + esc(money(r2(inc - out))) + '</strong></div>' +
+      '</div></section><p class="small muted">Tap an item to edit it. Edits apply to future “Apply recurring items” runs; entries already created keep their old values.</p>';
+    return h;
+  }
+
+  function viewSettings() {
+    var h = '<div class="pagetitle">Settings</div>' +
+      '<section class="card"><label class="field"><span>Currency</span><select id="currency">' +
+      CURRENCIES.map(function (c) { return '<option' + (c === state.currency ? ' selected' : '') + '>' + c + '</option>'; }).join('') +
+      '</select></label></section>' +
+      '<section class="card stack"><h2>Export</h2>' +
+      '<div class="line2"><span>Spreadsheet (CSV)</span><button class="btn" data-act="dl-csv">Download</button><button class="btn" data-act="cp-csv">Copy</button></div>' +
+      '<div class="line2"><span>Full backup (JSON)</span><button class="btn" data-act="dl-json">Download</button><button class="btn" data-act="cp-json">Copy</button></div>' +
+      '</section>' +
+      '<section class="card stack"><h2>Restore from backup</h2>' +
+      '<label class="field"><span>Backup file</span><input type="file" id="file" accept=".json,application/json"></label>' +
+      '<label class="field"><span>Or paste backup text</span><textarea id="io" spellcheck="false"></textarea></label>' +
+      '<button class="btn block" data-act="restore">Replace my data with this backup</button></section>' +
+      '<section class="card stack"><h2>Your data</h2>' +
+      '<div class="small muted">' + state.entries.length + ' entries and ' + state.recurring.length + ' recurring items, stored only in this browser on this device.</div>' +
+      '<div class="small muted">Add the app to your home screen first and enter data there: Safari and the home-screen app keep separate storage. ' +
+      'Clearing site data or removing the app erases everything, so export a backup now and then.</div>' +
+      '<button class="btn danger block" data-act="erase">Erase all data</button></section>';
+    return h;
+  }
+
+  function render() {
+    $('#view').innerHTML = ui.tab === 'month' ? viewMonth() : ui.tab === 'recurring' ? viewRecurring() : viewSettings();
+    document.querySelectorAll('.tabs button').forEach(function (b) {
+      if (b.getAttribute('data-tab') === ui.tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
+  }
+
+  /* ---------- sheets ---------- */
+  function catOptions(income, selected) {
+    var list = income ? INCOME : EXPENSE;
+    if (selected && list.indexOf(selected) < 0) list = [selected].concat(list);
+    return list.map(function (c) { return '<option' + (c === selected ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('');
+  }
+  function typeSeg(income) {
+    return '<div class="seg" role="radiogroup" aria-label="Type"><label><input type="radio" name="type" value="expense"' + (income ? '' : ' checked') +
+      '><span>Expense</span></label><label><input type="radio" name="type" value="income"' + (income ? ' checked' : '') + '><span>Income</span></label></div>';
+  }
+  function showSheet(html) {
+    $('#sheet').innerHTML = html; $('#scrim').hidden = false;
+    var amt = $('#f-amount'); if (amt) { amt.addEventListener('input', validate); validate(); }
+    document.querySelectorAll('#sheet input[name="type"]').forEach(function (r) {
+      r.addEventListener('change', function () {
+        var inc = $('#sheet input[name="type"]:checked').value === 'income';
+        var sel = $('#f-cat'), cur = sel.value;
+        var opts = inc ? INCOME : EXPENSE;
+        sel.innerHTML = catOptions(inc, opts.indexOf(cur) >= 0 ? cur : opts[0]);
+      });
+    });
+  }
+  function closeSheet() { $('#scrim').hidden = true; $('#sheet').innerHTML = ''; form = null; armed = null; }
+  function validate() {
+    var amt = $('#f-amount'), btn = $('#f-save'), err = $('#f-err');
+    if (!amt || !btn) return;
+    var v = parseAmount(amt.value), ok = v !== null && v > 0;
+    btn.disabled = !ok;
+    err.textContent = amt.value.trim() && !ok ? 'Enter a number greater than zero.' : '';
+  }
+
+  function openEntry(id) {
+    var ex = id ? state.entries.filter(function (e) { return e.id === id; })[0] : null;
+    if (id && !ex) return;
+    form = { kind: 'entry', id: ex ? ex.id : null };
+    var inc = ex ? ex.isIncome : false;
+    var date = ex ? ex.date : (ui.month === ymNow() ? todayStr() : ui.month + '-01');
+    showSheet('<h3>' + (ex ? 'Edit entry' : 'New entry') + '</h3>' + typeSeg(inc) +
+      '<label class="field"><span>Amount</span><input id="f-amount" inputmode="decimal" autocomplete="off" value="' + (ex ? esc(plain(ex.amount)) : '') + '"></label>' +
+      '<div class="err" id="f-err"></div>' +
+      '<label class="field"><span>Category</span><select id="f-cat">' + catOptions(inc, ex ? ex.category : EXPENSE[0]) + '</select></label>' +
+      '<label class="field"><span>Date</span><input id="f-date" type="date" value="' + date + '"></label>' +
+      '<label class="field"><span>Note (optional)</span><input id="f-note" autocomplete="off" value="' + (ex ? esc(ex.note) : '') + '"></label>' +
+      '<div class="btnrow"><button class="btn" data-act="close">Cancel</button><button class="btn primary" id="f-save" data-act="save">Save</button></div>' +
+      (ex ? '<button class="btn danger block" data-act="del">Delete entry</button>' : ''));
+    if (!ex) $('#f-amount').focus();
+  }
+  function openRecurring(id) {
+    var ex = id ? state.recurring.filter(function (r) { return r.id === id; })[0] : null;
+    if (id && !ex) return;
+    form = { kind: 'rec', id: ex ? ex.id : null };
+    var inc = ex ? ex.isIncome : false;
+    showSheet('<h3>' + (ex ? 'Edit recurring item' : 'New recurring item') + '</h3>' + typeSeg(inc) +
+      '<label class="field"><span>Name (e.g. Rent)</span><input id="f-name" autocomplete="off" value="' + (ex ? esc(ex.name) : '') + '"></label>' +
+      '<label class="field"><span>Amount</span><input id="f-amount" inputmode="decimal" autocomplete="off" value="' + (ex ? esc(plain(ex.amount)) : '') + '"></label>' +
+      '<div class="err" id="f-err"></div>' +
+      '<label class="field"><span>Category</span><select id="f-cat">' + catOptions(inc, ex ? ex.category : EXPENSE[0]) + '</select></label>' +
+      '<label class="field"><span>Day of month (1 to 31)</span><input id="f-day" type="number" min="1" max="31" inputmode="numeric" value="' + (ex ? ex.day : 1) + '"></label>' +
+      '<div class="btnrow"><button class="btn" data-act="close">Cancel</button><button class="btn primary" id="f-save" data-act="save">Save</button></div>' +
+      (ex ? '<button class="btn danger block" data-act="del">Delete item</button>' : ''));
+    if (!ex) $('#f-name').focus();
+  }
+
+  function saveForm() {
+    if (!form) return;
+    var amount = parseAmount($('#f-amount').value);
+    if (amount === null || !(amount > 0)) return;
+    amount = r2(amount);
+    var inc = $('#sheet input[name="type"]:checked').value === 'income';
+    var cat = $('#f-cat').value;
+    if (form.kind === 'entry') {
+      var date = $('#f-date').value;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { $('#f-err').textContent = 'Pick a date.'; return; }
+      var note = $('#f-note').value.trim();
+      var ex = state.entries.filter(function (e) { return e.id === form.id; })[0];
+      if (ex) { ex.amount = amount; ex.isIncome = inc; ex.category = cat; ex.date = date; ex.note = note; }
+      else state.entries.push({ id: uid(), amount: amount, date: date, category: cat, note: note, isIncome: inc, recurringID: null });
+      if (date.slice(0, 7) !== ui.month) ui.month = date.slice(0, 7);
+    } else {
+      var name = $('#f-name').value.trim() || cat;
+      var day = Math.min(31, Math.max(1, Math.round(Number($('#f-day').value) || 1)));
+      var rx = state.recurring.filter(function (r) { return r.id === form.id; })[0];
+      if (rx) { rx.name = name; rx.amount = amount; rx.day = day; rx.category = cat; rx.isIncome = inc; }
+      else state.recurring.push({ id: uid(), name: name, amount: amount, day: day, category: cat, isIncome: inc });
+    }
+    save(); closeSheet(); render();
+  }
+
+  function applyRecurring() {
+    if (!state.recurring.length) { toast('Add recurring items first, on the Recurring tab.'); return; }
+    var ym = ui.month, n = daysIn(ym), added = 0;
+    state.recurring.forEach(function (r) {
+      var exists = state.entries.some(function (e) { return e.recurringID === r.id && e.date.slice(0, 7) === ym; });
+      if (exists) return;
+      state.entries.push({ id: uid(), amount: r.amount, date: ym + '-' + pad(Math.min(r.day, n)), category: r.category,
+        note: r.name, isIncome: r.isIncome, recurringID: r.id });
+      added++;
+    });
+    if (added) { save(); render(); }
+    toast(added ? 'Added ' + added + (added === 1 ? ' item' : ' items') + ' to ' + ymLabel(ym) + '.' : 'Everything is already in ' + ymLabel(ym) + '.');
+  }
+
+  /* ---------- export / import ---------- */
+  function csvField(s) {
+    var t = String(s);
+    if (t && '=+-@'.indexOf(t.charAt(0)) >= 0) t = "'" + t;
+    return '"' + t.replace(/"/g, '""') + '"';
+  }
+  function csvText() {
+    var rows = ['date,type,category,amount,note'];
+    state.entries.slice().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; }).forEach(function (e) {
+      rows.push([e.date, e.isIncome ? 'income' : 'expense', csvField(e.category), e.amount, csvField(e.note)].join(','));
+    });
+    return rows.join('\n');
+  }
+  function jsonText() {
+    return JSON.stringify({ app: 'cashflow', version: 1, exported: new Date().toISOString(),
+      currency: state.currency, entries: state.entries, recurring: state.recurring }, null, 2);
+  }
+  function download(name, text, mime) {
+    try {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([text], { type: mime }));
+      a.download = name; document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+      toast('Download started: ' + name + '. If nothing happens, use Copy instead.');
+    } catch (e) { copy(text); }
+  }
+  function copy(text) {
+    function fallback() {
+      var io = $('#io'); if (io) { io.value = text; io.focus(); io.select(); }
+      toast('Copy was blocked. The text is in the box under Restore; select and copy it from there.');
+    }
+    try {
+      navigator.clipboard.writeText(text).then(function () { toast('Copied to clipboard.'); }, fallback);
+    } catch (e) { fallback(); }
+  }
+  function restore() {
+    var io = $('#io'), text = io ? io.value.trim() : '';
+    if (!text) { toast('Choose a backup file or paste its text first.'); return; }
+    var obj;
+    try { obj = JSON.parse(text); } catch (e) { toast('That is not a valid backup. Use a file from Full backup (JSON).'); return; }
+    if (!obj || (!Array.isArray(obj.entries) && !Array.isArray(obj.recurring))) { toast('That file has no entries or recurring items.'); return; }
+    var next = clean(obj);
+    if (twice('restore', document.querySelector('[data-act="restore"]'),
+        'Tap again: replace with ' + next.entries.length + ' entries, ' + next.recurring.length + ' recurring')) {
+      state = next; save(); render(); toast('Backup restored.');
+    }
+  }
+
+  /* ---------- events ---------- */
+  document.addEventListener('click', function (ev) {
+    if (ev.target.id === 'scrim') { closeSheet(); return; }
+    var t = ev.target.closest('[data-act]'); if (!t) return;
+    var a = t.getAttribute('data-act'), id = t.getAttribute('data-id');
+    switch (a) {
+      case 'tab': ui.tab = t.getAttribute('data-tab'); render(); window.scrollTo(0, 0); break;
+      case 'prev': ui.month = addMonths(ui.month, -1); render(); break;
+      case 'next': ui.month = addMonths(ui.month, 1); render(); break;
+      case 'today': ui.month = ymNow(); render(); break;
+      case 'add': openEntry(null); break;
+      case 'edit': openEntry(id); break;
+      case 'radd': openRecurring(null); break;
+      case 'redit': openRecurring(id); break;
+      case 'apply': applyRecurring(); break;
+      case 'close': closeSheet(); break;
+      case 'save': saveForm(); break;
+      case 'del':
+        if (twice('del', t, 'Tap again to delete') && form) {
+          if (form.kind === 'entry') state.entries = state.entries.filter(function (e) { return e.id !== form.id; });
+          else state.recurring = state.recurring.filter(function (r) { return r.id !== form.id; });
+          save(); closeSheet(); render();
+        }
+        break;
+      case 'dl-csv': download('cash-flow.csv', csvText(), 'text/csv'); break;
+      case 'dl-json': download('cash-flow-backup.json', jsonText(), 'application/json'); break;
+      case 'cp-csv': copy(csvText()); break;
+      case 'cp-json': copy(jsonText()); break;
+      case 'restore': restore(); break;
+      case 'erase':
+        if (twice('erase', t, 'Tap again to erase everything')) {
+          state = blank(); save(); render(); toast('All data erased.');
+        }
+        break;
+    }
+  });
+  document.addEventListener('change', function (ev) {
+    var t = ev.target;
+    if (t.id === 'currency') { state.currency = t.value; save(); render(); }
+    if (t.id === 'file' && t.files && t.files[0]) {
+      var rd = new FileReader();
+      rd.onload = function () { var io = $('#io'); if (io) io.value = String(rd.result); toast('File loaded. Review, then tap Replace.'); };
+      rd.onerror = function () { toast('Could not read that file.'); };
+      rd.readAsText(t.files[0]);
+    }
+  });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !$('#scrim').hidden) closeSheet(); });
+
+  render();
+
+  // pwa: offline support when served over https
+  try {
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(function () {});
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
